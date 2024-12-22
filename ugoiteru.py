@@ -1,10 +1,14 @@
-import network
-import socket
-import time
-from machine import Pin, ADC
-from secret import ssid,password
 from machine import Pin, I2C, PWM
 import ssd1306
+import utime
+import time
+import network
+import urequests
+import ujson
+from secret import ssid,password
+
+#ラズパイに設定した固定IPと使用するポート番号
+url = 'https://prj-freeren-back.onrender.com/device/input'
 
 # MPU6050のI2Cアドレス
 MPU6050_ADDR = 0x68
@@ -25,23 +29,10 @@ speaker = PWM(Pin(4, Pin.OUT))
 stay = 0
 attack = 0
 defence = 0
-status = "stay"
+action = "stay"
 before = "stay"
 
 A4 = 440
-
-#移植部分
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-wlan.connect(ssid, password)
-while not wlan.isconnected() and wlan.status() >= 0:
-    print("Waiting to connect:")
-    time.sleep(1)
-
-# Should be connected and have an IP address
-wlan.status() # 3 == success
-wlan.ifconfig()
-print(wlan.ifconfig())
 
 def MPU6050_init(i2c):
     # MPU6050をスリープモードから解除
@@ -76,9 +67,52 @@ MPU6050_init(i2c)
 # OLEDの設定（幅128ピクセル、高さ64ピクセル）
 oled = ssd1306.SSD1306_I2C(128, 64, i2c)
 
+#温度取得と通信のインターバル（秒）
+interval = 1
+
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.connect(ssid, password)
+
+max_wait = 10
+while max_wait > 0:
+    if wlan.status() < 0 or wlan.status() >= 3:
+        break
+    max_wait -= 1
+    print('waiting for connection...')
+    time.sleep(1)
+    
+if wlan.status() != 3:
+    raise RuntimeError('network connection failed')
+else:
+    print('connected')
+    status = wlan.ifconfig()
+    print('ip = ' + status[0])
+
+#ユニキャスト
+def com_send(text):
+    #データをDICT型で宣言
+    print(text)
+    data = {
+             "deviceId" : "1",
+             "action" : text
+             }
+    #jsonデータで送信するという事を明示的に宣言
+    header = {
+        'Content-Type' : 'application/json'
+         }
+    res = urequests.post(
+        url,
+        data = ujson.dumps(data).encode("utf-8"),
+        headers = header
+    )
+    print(res.json())
+    res.close()
+
+
+#一定間隔で内部温度を取得してキャスト
 while True:
-    ai = socket.getaddrinfo("ws://172.16.11.67:8080//ws?deviceid=2", 80) # Address of Web Server
-    addr = ai[0][-1]
+
     # 加速度とジャイロのデータを取得
     accel_x, accel_y, accel_z= get_accel_gyro_data(i2c)
     
@@ -91,39 +125,27 @@ while True:
     
     if accel_x < -7 or 7 < accel_x:
         attack_LED.value(1)
-        status = "attack"
+        action = "attack"
     else:
         attack_LED.value(0)
     if accel_y < -7 or 7 < accel_y:
         stay_LED.value(1)
-        status = "stay"
+        action = "collection"
     else:
         stay_LED.value(0)
     if accel_z < -7 or 7 < accel_z:
         defence_LED.value(1)
-        status = "defence"
+        action = "defend"
     else:
         defence_LED.value(0)
 
-    if before == status:
+    if before == action:
         speaker.duty_u16(0)
     else :
         speaker.freq(int(A4 + 0.5))
         speaker.duty_u16(0x8000)
+        com_send(action)
     
-    try:
-        cl, addr = s.accept()
-        print('client connected from', addr)
-        request = cl.recv(1024)
-        print(request)
-
-        cl.send(status)
-        print("Sent:" + status)
-        cl.close()
-
-    except OSError as e:
-        cl.close()
-        print('connection closed')
-    before = status
-
-    time.sleep(1)
+    utime.sleep(interval)
+        
+    before = action
