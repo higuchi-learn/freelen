@@ -134,10 +134,10 @@ while True:
         # 加速度とジャイロのデータを取得
         accel_x, accel_y, accel_z= get_accel_gyro_data(i2c)
 
-        if accel_x < -7 or 7 < accel_x:
+        if 7 < accel_x:
             action = "collection"
-            if accel_x < -7:
-                action = "finish"
+        if accel_x < -7:
+            action = "finish"
         if accel_y < -7 or 7 < accel_y:
             action = "attack"
         if accel_z < -7 or 7 < accel_z:
@@ -151,8 +151,7 @@ while True:
             melody = A3
         else :
             melody = 0
-            pushed = 1
-            activity = 0
+            pushed = True
             state = "noReady"
 
         speaker.freq(int(melody + 0.5))

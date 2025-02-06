@@ -18,16 +18,28 @@ ACCEL_XOUT_H = 0x3B
 ACCEL_YOUT_H = 0x3D
 ACCEL_ZOUT_H = 0x3F
 
-# LED、スピーカのピン番号
+# ボタン、スピーカのピン番号
+button = Pin(9, Pin.IN, Pin.PULL_UP)
 speaker = PWM(Pin(3, Pin.OUT))
 
 #変数宣言
+pushed = True
+state = "noReady"
 action = "collection"
 
+#音の周波数を指定
 A3 = 220
 A4 = 440
 A5 = 880
 melody = A4
+
+def checkbutton():
+    global pushed,activity,state
+    if button.value() == 0:
+        state = "ready"
+        print("pushed")
+    else :
+        print("nopush")
 
 def MPU6050_init(i2c):
     # MPU6050をスリープモードから解除
@@ -82,12 +94,14 @@ else:
     print('ip = ' + status[0])
 
 #ユニキャスト
-def com_send(text):
-    print(text)
+def com_send(action,state):
+    global pushed
+    print(action)
     #データをDICT型で宣言
     data = {
-             "deviceId" : "1",
-             "action" : text
+             "deviceId" : "2",
+             "action" : action,
+             "state" : state
              }
     #jsonデータで送信するという事を明示的に宣言
     header = {
@@ -99,55 +113,72 @@ def com_send(text):
         headers = header
     )
     print(res.json())
+    if res.json() == "{'error': 'player not ready'}":
+        pushed = True
+    if res.json() == "{'error': 'oppoenent not ready'}":
+        pushed = True
+    if res.json() == "{'error': 'change fighting'}":
+        state = "fighting"
+        pushed = False
     res.close()
 
-
-#一定間隔で内部温度を取得してキャスト
 while True:
 
-    # 加速度とジャイロのデータを取得
-    accel_x, accel_y, accel_z= get_accel_gyro_data(i2c)
+    while pushed:
+        checkbutton()
+        com_send(action,state)
 
-    if accel_x < -7 or 7 < accel_x:
-        action = "collection"
-    if accel_y < -7 or 7 < accel_y:
-        action = "attack"
-    if accel_z < -7 or 7 < accel_z:
-        action = "defend"
+    #一定間隔で内部温度を取得してキャスト
+    while state == "fighting":
 
+        # 加速度とジャイロのデータを取得
+        accel_x, accel_y, accel_z= get_accel_gyro_data(i2c)
 
-    if action == "collection":
-        melody = A4
-    elif action == "attack":
-        melody = A5
-    else:
-        melody = A3
-    speaker.freq(int(melody + 0.5))
-    speaker.duty_u16(0x8000)
-    if action == "collection":
-        utime.sleep(0.1)
-        speaker.duty_u16(0)
-    elif action == "attack":
-        utime.sleep(0.03)
-        speaker.duty_u16(0)
-        utime.sleep(0.03)
+        if 7 < accel_x:
+            action = "collection"
+        if accel_x < -7:
+            action = "finish"
+        if accel_y < -7 or 7 < accel_y:
+            action = "attack"
+        if accel_z < -7 or 7 < accel_z:
+            action = "defend"
+
+        if action == "collection":
+            melody = A4
+        elif action == "attack":
+            melody = A5
+        elif action == "defend":
+            melody = A3
+        else :
+            melody = 0
+            pushed = True
+            state = "noReady"
+
         speaker.freq(int(melody + 0.5))
         speaker.duty_u16(0x8000)
-        utime.sleep(0.03)
-        speaker.duty_u16(0)
-        utime.sleep(0.03)
-        speaker.duty_u16(0)
-        utime.sleep(0.03)
-        speaker.freq(int(melody + 0.5))
-        speaker.duty_u16(0x8000)
-        utime.sleep(0.03)
-        speaker.duty_u16(0)
-    com_send(action)
+        if action == "collection":
+            utime.sleep(0.1)
+            speaker.duty_u16(0)
+        elif action == "attack":
+            utime.sleep(0.03)
+            speaker.duty_u16(0)
+            utime.sleep(0.03)
+            speaker.freq(int(melody + 0.5))
+            speaker.duty_u16(0x8000)
+            utime.sleep(0.03)
+            speaker.duty_u16(0)
+            utime.sleep(0.03)
+            speaker.duty_u16(0)
+            utime.sleep(0.03)
+            speaker.freq(int(melody + 0.5))
+            speaker.duty_u16(0x8000)
+            utime.sleep(0.03)
+            speaker.duty_u16(0)
+        com_send(action,state)
 
-    if action == "defend":
-        melody = A3
-        speaker.freq(int(melody + 0.5))
-        speaker.duty_u16(0x8000)
+        if action == "defend":
+            melody = A3
+            speaker.freq(int(melody + 0.5))
+            speaker.duty_u16(0x8000)
 
-    utime.sleep(interval)
-
+        utime.sleep(interval)
