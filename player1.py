@@ -59,7 +59,7 @@ i2c = I2C(0, scl=Pin(17), sda=Pin(16), freq=400000)
 # MPU6050を初期化
 MPU6050_init(i2c)
 
-#温度取得と通信のインターバル（秒）
+#加速度取得と通信のインターバル（秒）
 interval = 0.5
 
 wlan = network.WLAN(network.STA_IF)
