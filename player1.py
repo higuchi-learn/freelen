@@ -100,7 +100,7 @@ def com_send(action,states):
     print(action)
     #データをDICT型で宣言
     data = {
-             "deviceId" : "2",
+             "deviceId" : "1",
              "action" : action,
              "state" : states
              }
