@@ -31,6 +31,7 @@ action = "collection"
 A3 = 220
 A4 = 440
 A5 = 880
+A6 = 1100
 melody = A4
 
 def checkbutton():
@@ -94,14 +95,14 @@ else:
     print('ip = ' + status[0])
 
 #ユニキャスト
-def com_send(action,state):
-    global pushed
+def com_send(action,states):
+    global pushed,state
     print(action)
     #データをDICT型で宣言
     data = {
              "deviceId" : "2",
              "action" : action,
-             "state" : state
+             "state" : states
              }
     #jsonデータで送信するという事を明示的に宣言
     header = {
@@ -113,13 +114,19 @@ def com_send(action,state):
         headers = header
     )
     print(res.json())
-    if res.json() == "{'error': 'player not ready'}":
+    print(state,action,pushed)
+    if res.json()["error"] == "player not ready":
         pushed = True
-    if res.json() == "{'error': 'oppoenent not ready'}":
+    if res.json()["error"] == "oppoenent not ready":
         pushed = True
-    if res.json() == "{'error': 'change fighting'}":
+    if res.json()["error"] == "change fighting":
+        print("---------")
         state = "fighting"
         pushed = False
+    if res.json()["error"] == "fighting":
+        print("continue")
+    if res.json()["error"] == "Input processed successfully":
+        print("wait")
     res.close()
 
 while True:
@@ -150,7 +157,7 @@ while True:
         elif action == "defend":
             melody = A3
         else :
-            melody = 0
+            melody = A6
             pushed = True
             state = "noReady"
 
@@ -180,5 +187,10 @@ while True:
             melody = A3
             speaker.freq(int(melody + 0.5))
             speaker.duty_u16(0x8000)
+        
+        if state == "noReady":
+            speaker.duty_u16(0)
 
         utime.sleep(interval)
+        print(state,action,pushed)
+        
